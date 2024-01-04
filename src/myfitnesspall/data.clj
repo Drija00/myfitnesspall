@@ -28,11 +28,11 @@
   [str]
   (Float. str))
 
-(def conversions {:name identity
+(def conversions {:name     identity
                   :calories strToInt
                   :proteins strToFloat
-                  :carbs strToFloat
-                  :fats strToFloat})
+                  :carbs    strToFloat
+                  :fats     strToFloat})
 
 (defn convert
   [comp-key value]
@@ -58,23 +58,44 @@
 
 (c/get-at! db)
 
-(c/with-write-transaction [db tx]
+
+#_(c/with-write-transaction [db tx]
                           (c/assoc-at tx [:counters] {:id 0 :users 0}))
 (defn add-user
   "create a user and assign them an id"
-  [username]
+  [user]
   (c/with-write-transaction [db tx]
-                            (when (c/get-at tx [:usernames username] )
-                              (throw (Exception. "username already exists")))
-                            (let [user-id (c/get-at tx [:counters :id])
-                                  user {:id user-id
-                                        :username username
-                                        :timestamp (System/currentTimeMillis)}]
+                            (let [user-id (c/get-at tx [:counters :id])]
                               (-> tx
                                   (c/assoc-at [:users user-id] user)
-                                  (c/assoc-at [:usernames username] user-id)
+                                  (c/assoc-at [:usernames (:username user)] user-id)
                                   (c/update-at [:counters :id] inc)
-                                  (c/update-at [:counters :users] inc)))))
+                                  (c/update-at [:counters :users] inc))))
+  user)
+
+(defn check-username
+  "check username"
+  [username]
+  (if (not (nil? (c/get-at! db [:usernames username])))
+    (throw (Exception. "username already exists"))
+    username
+    )
+  )
+
+(defn login
+  "login user"
+  [username password]
+  (if (not (nil? (c/get-at! db [:usernames username])))
+    (let [user-id (c/get-at! db [:usernames username])]
+      (if (= password (c/get-at! db [:users user-id :password]))
+        (c/get-at! db [:users user-id])
+        (throw (Exception. "invalid password"))
+        )
+      )
+    (throw (Exception. "username doesn't exists"))
+    )
+  )
+
 
 (defn get-user
   "fetch a user by their username"
@@ -82,12 +103,20 @@
   (c/with-read-transaction [db tx]
                            (when-let [user-id (c/get-at tx [:usernames username])]
                              (c/get-at tx [:users user-id]))))
+(defn get-food
+  "fetch a food by its name"
+  [name]
+  (c/with-read-transaction [db tx]
+                           (let [food-map (c/get-at tx [:foods])]
+                             (first (filter #(= (:name %) name) food-map)))))
+
+
 
 (defn rename-user
   "change a username"
   [username new-username]
   (c/with-write-transaction [db tx]
-                            (when (c/get-at tx [:usernames new-username] )
+                            (when (c/get-at tx [:usernames new-username])
                               (throw (Exception. "username already exists")))
                             (when-let [user-id (c/get-at tx [:usernames username])]
                               (-> tx
@@ -95,12 +124,21 @@
                                   (c/assoc-at [:usernames new-username] user-id)
                                   (c/assoc-at [:users user-id :username] new-username)))))
 
+(defn update-user
+  "update user"
+  [user]
+  (c/with-write-transaction [db tx]
+                            (when-let [user-id (c/get-at tx [:usernames (:username user)])]
+                              (-> tx
+                                  (c/assoc-at [:users user-id] user))))
+  user)
+
 (defn remove-user
   "remove a user"
   [username]
   (c/with-write-transaction [db tx]
                             (when-let [user-id (c/get-at tx [:usernames username])]
                               (-> tx
-                                  (c/dissoc-at [:username username])
+                                  (c/dissoc-at [:usernames username])
                                   (c/dissoc-at [:users user-id])
                                   (c/update-at [:counters :users] dec)))))

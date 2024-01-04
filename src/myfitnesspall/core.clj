@@ -1,6 +1,7 @@
 (ns myfitnesspall.core
   (:gen-class)
   (:require [clojure.string :as str]
+            [myfitnesspall.data :as data]
             [clojure.data.json :as json]
             [org.httpkit.client :as client]))
 
@@ -30,22 +31,23 @@
   (println (str/join " " ["Food:" (:name food) "Calories:" (:calories food)])))
 
 (defn create-user [username password gender age height weight calorie-goal proteins-goal fats-goal carbs-goal]
-  {:username            username
-   :password            password
-   :gender              gender
-   :age                 age
-   :height              height
-   :weight              weight
-   :daily-calorie-goal  calorie-goal
-   :consumed-calories   0
-   :daily-proteins-goal proteins-goal
-   :consumed-proteins   0
-   :daily-fats-goal     fats-goal
-   :consumed-fats       0
-   :daily-carbs-goal    carbs-goal
-   :consumed-carbs      0
-   :foods               []
-   :exercises           []})
+  (let [user {:username            username
+              :password            password
+              :gender              gender
+              :age                 age
+              :height              height
+              :weight              weight
+              :daily-calorie-goal  calorie-goal
+              :consumed-calories   0
+              :daily-proteins-goal proteins-goal
+              :consumed-proteins   0
+              :daily-fats-goal     fats-goal
+              :consumed-fats       0
+              :daily-carbs-goal    carbs-goal
+              :consumed-carbs      0
+              :foods               []
+              :exercises           []}]
+    (data/add-user user)))
 
 (defn add-food [user food-name calories proteins fats carbs]
   ;;(print (str user "/n" food-name "/n" calories))
@@ -126,14 +128,18 @@
         fat-calories (* fat-percentage daily-calories)
         carb-calories (* carb-percentage daily-calories)
 
-        protein-grams (/ protein-calories 4)
-        fat-grams (/ fat-calories 9)
-        carb-grams (/ carb-calories 4)]
+        protein-grams (round (/ protein-calories 4))
+        fat-grams (round (/ fat-calories 9))
+        carb-grams (round (/ carb-calories 4))]
 
     {:protein-goal protein-grams
      :fat-goal     fat-grams
      :carb-goal    carb-grams}
     )
+  )
+
+(defn intake-calculator [default asked]
+    (/ (* default asked) 100)
   )
 
 (defn def-macronutrients-percentage [gain-loss daily-calories]
@@ -171,10 +177,10 @@
                       ]))
   (println "Foods:")
   (doseq [food (:foods user)]
-    (println (str/join " " [" - " (:name food) "\n    - Calories:" (str (:calories food) "kcal")
-                            "\n    -" "Proteins:" (str (:proteins food) "g")
-                            "\n    -" "Fats:" (str (:fats food) "g")
-                            "\n    -" "Carbs:" (str (:carbs food) "g")
+    (println (str/join " " [" - " (:name food) "\n    - Calories:" (str (round (:calories food)) "kcal")
+                            "\n    -" "Proteins:" (str (round (:proteins food)) "g")
+                            "\n    -" "Fats:" (str (round (:fats food)) "g")
+                            "\n    -" "Carbs:" (str (round (:carbs food)) "g")
                             ])))
   (println "Exercises:")
   (doseq [exercise (:exercises user)]
@@ -192,9 +198,21 @@
           (recur))
       ))
   )
+(defn set-username []
+  (let [result (try
+                 (-> (prompt "Enter username:\n") data/check-username)
+                 (catch Exception e
+                   e))]
+    (if (instance? Exception result)
+      (do
+        (println "Caught an exception:" (.getMessage result))
+        (recur))
+      result)))
+
+
 
 (defn create-account []
-  (let [username (prompt "Enter username:\n")
+  (let [username (set-username)
         password (prompt "Enter password:\n")
         gender (choose-gender)
         age (-> (prompt "Enter age:\n") Integer/parseInt)
@@ -207,10 +225,15 @@
         carbs-goal (:carb-goal goal)]
     (create-user username password gender age height weight calorie-goal proteins-goal fats-goal carbs-goal)))
 
-(defn user-menu [user]
-  ;; Add user menu functionality here
-  (println "User Menu Placeholder"))
-
+(defn get-food []
+  (let [food-name (clojure.string/upper-case (prompt "Enter food name:\n"))
+        result (data/get-food food-name)]
+    (if (nil? result)
+      (do
+        (println "Food doesn't exist in our system.")
+        (recur))
+      result))
+  )
 
 (defn -main [u1]
     (print (str "\n===================================\nWelcome to MyFitnessPal\t" (:username u1) "!\n===================================\n"))
@@ -218,12 +241,13 @@
       (let [choice (-> (prompt "\n1. Add Food\n2. Add Exercise\n3. View Summary\n4. Exit\n\nSelect an option: ") Integer/parseInt)]
         (cond
           (= choice 1)
-          (let [food-name (-> (prompt "Enter food name:\n"))
-                calories (-> (prompt "Enter calories:\n") Integer/parseInt)
-                proteins (-> (prompt "Enter proteins in grams:\n") Integer/parseInt)
-                fats (-> (prompt "Enter fats in g:\n") Integer/parseInt)
-                carbs (-> (prompt "Enter carbs in g:\n") Integer/parseInt)]
-                  (recur (add-food u food-name calories proteins fats carbs)))
+          (let [food (get-food)
+                grams (-> (prompt "Enter grams:\n") Integer/parseInt)
+                calories (intake-calculator (:calories food) grams)
+                proteins (intake-calculator (:proteins food) grams)
+                fats (intake-calculator (:fats food) grams)
+                carbs (intake-calculator (:carbs food) grams)]
+                  (recur (add-food u (:name food) calories proteins fats carbs)))
 
           (= choice 2)
                 (let [exercise-name (-> (prompt "Enter exercise name:\n"))
@@ -233,6 +257,7 @@
           (= choice 3)
           (do
             (print-user-summary u)
+            (data/update-user u)
             (recur u))
 
           (= choice 4)
@@ -256,12 +281,17 @@
 
           (= choice 2)
                 (let [username (-> (prompt "Enter username:\n"))
-                      password (-> (prompt "Enter password:\n"))]
-                  (if (and (= username (:username u))
-                           (= password (:password u)))
-                    (recur (-main u))
-                    (do (println "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!Invalid username or password!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                        (recur u))))
+                      password (-> (prompt "Enter password:\n"))
+                      result (try
+                               (data/login username password)
+                               (catch Exception e
+                                 e))]
+                  (if (not (instance? Exception result))
+                    (recur (-main result))
+                    (do (println "Caught an exception:" (.getMessage result))
+                      (recur u)))
+                  )
+
           (= choice 3)
           (println "Goodbye!")
           :else
