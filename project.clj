@@ -7,5 +7,6 @@
                  [org.clojure/tools.cli "0.4.2"]
                  [org.clojure/data.json "2.4.0"]
                  [http-kit "2.8.0-beta3"]
-                 [codax "1.3.1"]]
+                 [codax "1.3.1"]
+                 [clj-time "0.15.2"]]
   :repl-options {:init-ns myfitnesspall.core})

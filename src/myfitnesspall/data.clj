@@ -1,5 +1,6 @@
 (ns myfitnesspall.data
-  (:require [codax.core :as c]))
+  (:require [codax.core :as c]
+            [clj-time.core :as time]))
 
 (def filename "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\food.csv")
 (slurp filename)
@@ -15,8 +16,6 @@
   (#(clojure.string/replace % #"\n" "") string))
 
 (def text (parse (parse2 (slurp filename))))
-
-(prn text)
 
 (def comp-keys [:name :calories :proteins :carbs :fats])
 
@@ -50,14 +49,12 @@
        rows))
 
 (def mapped-text (mapify text))
-(prn mapped-text)
 
 (def db (c/open-database! "data/demo-database"))
 
 (c/assoc-at! db [:foods] mapped-text)
 
 (c/get-at! db)
-
 
 #_(c/with-write-transaction [db tx]
                           (c/assoc-at tx [:counters] {:id 0 :users 0}))
@@ -67,11 +64,27 @@
   (c/with-write-transaction [db tx]
                             (let [user-id (c/get-at tx [:counters :id])]
                               (-> tx
+                                  (assoc user :id user-id)
                                   (c/assoc-at [:users user-id] user)
                                   (c/assoc-at [:usernames (:username user)] user-id)
                                   (c/update-at [:counters :id] inc)
                                   (c/update-at [:counters :users] inc))))
   user)
+
+#_(c/with-write-transaction [db tx]
+                          (c/assoc-at tx [:food-counters] {:id 0 :foods 0}))
+
+(defn add-user-food
+  "add food that user took"
+  [food]
+  (c/with-write-transaction [db tx]
+                            (let [user-food-id (c/get-at tx [:food-counters :id])]
+                              (-> tx
+                                  (c/assoc-at [:users-food user-food-id] food)
+                                  (c/assoc-at [:food-ids user-food-id] (:user-id food))
+                                  (c/update-at [:food-counters :id] inc)
+                                  (c/update-at [:food-counters :foods] inc)))
+  )food)
 
 (defn check-username
   "check username"
@@ -103,6 +116,16 @@
   (c/with-read-transaction [db tx]
                            (when-let [user-id (c/get-at tx [:usernames username])]
                              (c/get-at tx [:users user-id]))))
+
+(defn get-users-food
+  "Fetch a user's meals by user id"
+  [user-id]
+  (c/with-read-transaction [db tx]
+                           (let [food-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:food-ids])))]
+                             (when (seq food-user-ids)
+                               (map #(c/get-at tx [:users-food %]) food-user-ids)))))
+
+
 (defn get-food
   "fetch a food by its name"
   [name]
