@@ -5,12 +5,13 @@
             [clj-time.core :as time]))
 
 (def space-line "\n===================================\n")
+(def kg2lb 0.45359237)
 
 (defn food-map [user-id name calories proteins fats carbs]
   {:user-id user-id :date (time/now) :name name :calories calories :proteins proteins :fats fats :carbs carbs})
 
-(defn exercise-map [name calories]
-  {:name name :calories calories})
+(defn exercise-map [user-id name duration calories]
+  {:user-id user-id :date (time/now) :exercise name :duration duration :calories calories})
 
 (defn print-food [food]
   (println (str/join " " ["Food:" (:name food) "Calories:" (:calories food)])))
@@ -33,7 +34,6 @@
     (data/add-user user)))
 
 (defn add-food [user food-name calories proteins fats carbs]
-  ;;(print (str user "/n" food-name "/n" calories))
   (let [food (food-map (:id user) food-name calories proteins fats carbs)
         updated-user (assoc user
                        :consumed-calories (+ (:consumed-calories user) calories)
@@ -44,13 +44,11 @@
     updated-user
     ))
 
-(defn add-exercise [user exercise-name calories]
-  ;;(print (str user "/n" food-name "/n" calories))
-  (let [exercise (exercise-map exercise-name calories)
+(defn add-exercise [user exercise-name duration calories]
+  (let [exercise (exercise-map (:id user) exercise-name duration calories)
         updated-user (assoc user
-                       :consumed-calories (- (:consumed-calories user) calories)
-                       :exercises (conj (:exercises user) exercise))]
-    ;;(print updated-user)
+                       :consumed-calories (- (:consumed-calories user) calories))]
+    (data/add-user-exercise exercise)
     updated-user
     ))
 
@@ -124,6 +122,14 @@
     (/ (* default asked) 100)
   )
 
+(defn exercise-calorie-calculator [exercise-calories duration user-weight]
+  (println (str "1. calories" exercise-calories))
+  (println (str "2. duration" duration))
+  (println (str "3. weight" user-weight))
+  (println (str "4. kg2lb" kg2lb))
+  (/ (* (* (/ user-weight kg2lb) (/ exercise-calories kg2lb)) duration) 60)
+  )
+
 (defn def-macronutrients-percentage [gain-loss daily-calories]
   (if (<= gain-loss 0)
     (calculate-macronutrients 0.15 0.3 0.55 daily-calories)
@@ -166,8 +172,8 @@
                             "\n    -" "Carbs:" (str (round (:carbs food)) "g")
                             ])))
   (println "Exercises:")
-  (doseq [exercise (:exercises user)]
-    (println (str/join " " [" - " (:name exercise) "\n    - Burned Calories:" (:calories exercise) "kcal"])))
+  (doseq [exercise (data/get-users-exercise (:id user))]
+    (println (str/join " " [" - " (:exercise exercise) "\n    - Burned Calories:" (:calories exercise) "kcal"])))
   (println space-line))
 
 (defn choose-gender []
@@ -219,6 +225,16 @@
       result))
   )
 
+(defn get-exercise []
+  (let [exercise-name (clojure.string/upper-case (prompt (str space-line "Enter exercise name:\n")))
+        result (data/get-exercise exercise-name)]
+    (if (nil? result)
+      (do
+        (println (str space-line "Exercise doesn't exist in our system."))
+        (recur))
+      result))
+  )
+
 (defn -main [u1]
     (print (str space-line "Welcome to MyFitnessPal\t" (:username u1) "!" space-line))
     (loop [u u1]
@@ -233,10 +249,12 @@
                 carbs (intake-calculator (:carbs food) grams)]
                   (recur (add-food u (:name food) calories proteins fats carbs)))
 
+
           (= choice 2)
-                (let [exercise-name (-> (prompt (str space-line "Enter exercise name:\n")))
-                      calories (-> (prompt (str space-line "Enter calories:\n")) Integer/parseInt)]
-                  (recur (add-exercise u exercise-name calories)))
+          (let [exercise (get-exercise)
+                duration (-> (prompt (str space-line "Enter exercise duration in minutes:\n")) Integer/parseInt)
+                calories (exercise-calorie-calculator (:calories-per-kg exercise) duration (:weight u))]
+            (recur (add-exercise u (:exercise exercise) duration calories)))
 
           (= choice 3)
           (do

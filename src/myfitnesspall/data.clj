@@ -3,7 +3,9 @@
             [clj-time.core :as time]))
 
 (def filename "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\food.csv")
+(def exercise-file "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\exercise.csv")
 (slurp filename)
+(slurp exercise-file)
 
 (defn parse
   [string]
@@ -16,8 +18,10 @@
   (#(clojure.string/replace % #"\n" "") string))
 
 (def text (parse (parse2 (slurp filename))))
+(def text-exercise (parse (parse2 (slurp exercise-file))))
 
 (def comp-keys [:name :calories :proteins :carbs :fats])
+(def exercise-keys [:exercise :calories-per-kg])
 
 (defn strToInt
   [str]
@@ -32,10 +36,16 @@
                   :proteins strToFloat
                   :carbs    strToFloat
                   :fats     strToFloat})
+(def conversions-ex {:exercise identity
+                     :calories-per-kg strToFloat})
 
 (defn convert
   [comp-key value]
   ((get conversions comp-key) value))
+
+(defn convert-ex
+  [exercise-keys value]
+  ((get conversions-ex exercise-keys) value))
 
 
 (defn mapify
@@ -48,11 +58,23 @@
                  (map vector comp-keys unmapped-row)))
        rows))
 
+(defn mapify-ex
+  "Return a seq of maps like {:name \"Edward Cullen\" :glitter-index 10}"
+  [rows]
+  (map (fn [unmapped-row]
+         (reduce (fn [row-map [exercise-keys value]]
+                   (assoc row-map exercise-keys (convert-ex exercise-keys value)))
+                 {}
+                 (map vector exercise-keys unmapped-row)))
+       rows))
+
 (def mapped-text (mapify text))
+(def exercise-text (mapify-ex text-exercise))
 
 (def db (c/open-database! "data/demo-database"))
 
 (c/assoc-at! db [:foods] mapped-text)
+(c/assoc-at! db [:exercises] exercise-text)
 
 (c/get-at! db)
 
@@ -85,6 +107,21 @@
                                   (c/update-at [:food-counters :id] inc)
                                   (c/update-at [:food-counters :foods] inc)))
   )food)
+
+#_(c/with-write-transaction [db tx]
+                            (c/assoc-at tx [:exercise-counters] {:id 0 :exercises 0}))
+
+(defn add-user-exercise
+  "add exercise that user performed"
+  [exercise]
+  (c/with-write-transaction [db tx]
+                            (let [user-exercise-id (c/get-at tx [:exercise-counters :id])]
+                              (-> tx
+                                  (c/assoc-at [:users-exercise user-exercise-id] exercise)
+                                  (c/assoc-at [:exercise-ids user-exercise-id] (:user-id exercise))
+                                  (c/update-at [:exercise-counters :id] inc)
+                                  (c/update-at [:exercise-counters :exercises] inc)))
+  )exercise)
 
 (defn check-username
   "check username"
@@ -125,6 +162,14 @@
                              (when (seq food-user-ids)
                                (map #(c/get-at tx [:users-food %]) food-user-ids)))))
 
+(defn get-users-exercise
+  "Fetch a user's exercises by user id"
+  [user-id]
+  (c/with-read-transaction [db tx]
+                           (let [exercise-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:exercise-ids])))]
+                             (when (seq exercise-user-ids)
+                               (map #(c/get-at tx [:users-exercise %]) exercise-user-ids)))))
+
 
 (defn get-food
   "fetch a food by its name"
@@ -133,7 +178,12 @@
                            (let [food-map (c/get-at tx [:foods])]
                              (first (filter #(= (:name %) name) food-map)))))
 
-
+(defn get-exercise
+  "fetch a exercise by its name"
+  [name]
+  (c/with-read-transaction [db tx]
+                           (let [exercise-map (c/get-at tx [:exercises])]
+                             (first (filter #(= (:exercise %) name) exercise-map)))))
 
 (defn rename-user
   "change a username"
