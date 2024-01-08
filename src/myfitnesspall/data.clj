@@ -155,23 +155,30 @@
                              (c/get-at tx [:users user-id]))))
 
 (defn get-users-food
-  "Fetch a user's meals by user id"
+  "Fetch a users meals by user id"
   [user-id]
   (c/with-read-transaction [db tx]
                            (let [food-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:food-ids])))]
                              (when (seq food-user-ids)
-                               (map #(c/get-at tx [:users-food %]) food-user-ids)))))
+                               (let [today-midnight (time/today-at-midnight)
+                                     user-foods (map #(c/get-at tx [:users-food %]) food-user-ids)
+                                     filtered-foods (filter #(not(nil? %)) user-foods)
+                                     filtered-foods (filter #(not (time/before? (:date %) today-midnight)) filtered-foods)]
+                                 filtered-foods)))))
 
-(defn get-users-exercise
-  "Fetch a user's exercises by user id"
-  [user-id]
-  (c/with-read-transaction [db tx]
-                           (let [exercise-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:exercise-ids])))]
-                             (when (seq exercise-user-ids)
-                               (map #(c/get-at tx [:users-exercise %]) exercise-user-ids)))))
+  (defn get-users-exercise
+    "Fetch a user's exercises by user id"
+    [user-id]
+    (c/with-read-transaction [db tx]
+                             (let [exercise-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:exercise-ids])))]
+                               (when (seq exercise-user-ids)
+                                 (let [today-midnight (time/today-at-midnight)
+                                       user-exercises (map #(c/get-at tx [:users-exercise %]) exercise-user-ids)
+                                       filtered-exercises (filter #(not(nil? %)) user-exercises)
+                                       filtered-exercises (filter #(not (time/before? (:date %) today-midnight)) filtered-exercises)]
+                                   filtered-exercises)))))
 
-
-(defn get-food
+  (defn get-food
   "fetch a food by its name"
   [name]
   (c/with-read-transaction [db tx]

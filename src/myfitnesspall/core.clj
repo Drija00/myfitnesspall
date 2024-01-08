@@ -173,7 +173,7 @@
                             ])))
   (println "Exercises:")
   (doseq [exercise (data/get-users-exercise (:id user))]
-    (println (str/join " " [" - " (:exercise exercise) "\n    - Burned Calories:" (:calories exercise) "kcal"])))
+    (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min" "\n    - Burned Calories:" (round (:calories exercise)) "kcal"])))
   (println space-line))
 
 (defn choose-gender []
