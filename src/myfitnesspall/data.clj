@@ -84,14 +84,15 @@
   "create a user and assign them an id"
   [user]
   (c/with-write-transaction [db tx]
-                            (let [user-id (c/get-at tx [:counters :id])]
+                            (let [user-id (c/get-at tx [:counters :id])
+                                  updated-user (assoc user :id user-id)]
                               (-> tx
-                                  (assoc user :id user-id)
-                                  (c/assoc-at [:users user-id] user)
-                                  (c/assoc-at [:usernames (:username user)] user-id)
+                                  (c/assoc-at [:users user-id] updated-user)
+                                  (c/assoc-at [:usernames (:username updated-user)] user-id)
                                   (c/update-at [:counters :id] inc)
-                                  (c/update-at [:counters :users] inc))))
-  user)
+                                  (c/update-at [:counters :users] inc))
+                              )))
+
 
 #_(c/with-write-transaction [db tx]
                           (c/assoc-at tx [:food-counters] {:id 0 :foods 0}))

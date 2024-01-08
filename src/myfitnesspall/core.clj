@@ -16,13 +16,15 @@
 (defn print-food [food]
   (println (str/join " " ["Food:" (:name food) "Calories:" (:calories food)])))
 
-(defn create-user [username password gender age height weight calorie-goal proteins-goal fats-goal carbs-goal]
+(defn create-user [username password gender age height weight weight-goal day-goal calorie-goal proteins-goal fats-goal carbs-goal]
   (let [user {:username            username
               :password            password
               :gender              gender
               :age                 age
               :height              height
               :weight              weight
+              :weight-goal         (+ weight weight-goal)
+              :day-goal            day-goal
               :daily-calorie-goal  calorie-goal
               :consumed-calories   0
               :daily-proteins-goal proteins-goal
@@ -143,7 +145,7 @@
         days-goal (days-goal)
         daily-goal (+ (* (BMR gender weight height age) activity) (calorie-adjustment kg-goal days-goal))
         macros (def-macronutrients-percentage kg-goal daily-goal)]
-    (assoc macros :daily-goal daily-goal)
+    (assoc macros :daily-goal daily-goal :kg-goal kg-goal :days-goal days-goal)
     )
   )
 
@@ -155,6 +157,8 @@
                       "Age:" (str " - " (:age user) "y")
                       "Height:" (str " - " (:height user) "cm")
                       "Weight:" (str " - " (:weight user) "kg")
+                      "Weight goal:" (str " - " (:weight-goal user) "kg")
+                      "Day goal:" (str " - " (:day-goal user))
                       "Daily Calorie Goal:" (str " - " (round (:daily-calorie-goal user)) " kcal")
                       "Consumed Calories:" (str " - " (round (:consumed-calories user)) " kcal")
                       "Daily Proteins Goal:" (str " - " (round (:daily-proteins-goal user)) "g")
@@ -188,6 +192,7 @@
           (recur))
       ))
   )
+
 (defn set-username []
   (let [result (try
                  (-> (prompt (str space-line "Enter username:\n")) data/check-username)
@@ -212,8 +217,11 @@
         calorie-goal (:daily-goal goal)
         proteins-goal (:protein-goal goal)
         fats-goal (:fat-goal goal)
-        carbs-goal (:carb-goal goal)]
-    (create-user username password gender age height weight calorie-goal proteins-goal fats-goal carbs-goal)))
+        carbs-goal (:carb-goal goal)
+        day-goal (:days-goal goal)
+        weight-goal (:kg-goal goal)]
+    (create-user username password gender age height weight weight-goal day-goal calorie-goal proteins-goal fats-goal carbs-goal)
+    (println (str space-line "Account created successfuly"))))
 
 (defn get-food []
   (let [food-name (clojure.string/upper-case (prompt (str space-line "Enter food name:\n")))
