@@ -167,6 +167,15 @@
                                      filtered-foods (filter #(not (time/before? (:date %) today-midnight)) filtered-foods)]
                                  filtered-foods)))))
 
+(defn get-all-users-food
+  "Fetch a users meals by user id"
+  [user-id]
+  (c/with-read-transaction [db tx]
+                           (let [food-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:food-ids])))]
+                             (when (seq food-user-ids)
+                               (map #(c/get-at tx [:users-food %]) food-user-ids)
+                               ))))
+
   (defn get-users-exercise
     "Fetch a user's exercises by user id"
     [user-id]
@@ -178,6 +187,15 @@
                                        filtered-exercises (filter #(not(nil? %)) user-exercises)
                                        filtered-exercises (filter #(not (time/before? (:date %) today-midnight)) filtered-exercises)]
                                    filtered-exercises)))))
+
+(defn get-all-users-exercise
+  "Fetch a user's exercises by user id"
+  [user-id]
+  (c/with-read-transaction [db tx]
+                           (let [exercise-user-ids (map key (filter #(= user-id (val %)) (c/get-at! db [:exercise-ids])))]
+                             (when (seq exercise-user-ids)
+                               (map #(c/get-at tx [:users-exercise %]) exercise-user-ids)
+                               ))))
 
   (defn get-food
   "fetch a food by its name"
@@ -209,9 +227,8 @@
   "update user"
   [user]
   (c/with-write-transaction [db tx]
-                            (when-let [user-id (c/get-at tx [:usernames (:username user)])]
                               (-> tx
-                                  (c/assoc-at [:users user-id] user))))
+                                  (c/assoc-at [:users (:id user)] user)))
   user)
 
 (defn remove-user

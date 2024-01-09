@@ -2,10 +2,13 @@
   (:gen-class)
   (:require [clojure.string :as str]
             [myfitnesspall.data :as data]
-            [clj-time.core :as time]))
+            [clj-time.core :as time]
+            [clj-time.format :as fmt]))
 
 (def space-line "\n===================================\n")
 (def kg2lb 0.45359237)
+
+(def my-format (fmt/formatter "yyyy-MM-dd"))
 
 (defn food-map [user-id name calories proteins fats carbs]
   {:user-id user-id :date (time/now) :name name :calories calories :proteins proteins :fats fats :carbs carbs})
@@ -70,6 +73,13 @@
     )
   )
 
+(defn BMR-2 [gender weight height age]
+  (if (= gender "Male")
+    (+ 88.362 (* 13.397 weight) (* 4.799 height) (- (* 5.677 age)))
+    (+ 447.593 (* 9.247 weight) (* 3.098 height) (- (* 4.33 age)))
+    )
+  )
+
 (defn gain-loss []
   (println space-line "1. Sedentary\n2. Lightly active\n3. Mandatory active\n4. Very active\n5. Extra active" space-line)
   (let [choice (-> (prompt "Enter your daily activity:") Integer/parseInt)]
@@ -125,10 +135,6 @@
   )
 
 (defn exercise-calorie-calculator [exercise-calories duration user-weight]
-  (println (str "1. calories" exercise-calories))
-  (println (str "2. duration" duration))
-  (println (str "3. weight" user-weight))
-  (println (str "4. kg2lb" kg2lb))
   (/ (* (* (/ user-weight kg2lb) (/ exercise-calories kg2lb)) duration) 60)
   )
 
@@ -143,13 +149,61 @@
   (let [activity (gain-loss)
         kg-goal (kg-goal)
         days-goal (days-goal)
-        daily-goal (+ (* (BMR gender weight height age) activity) (calorie-adjustment kg-goal days-goal))
+        daily-goal (+ (* (BMR-2 gender weight height age) activity) (calorie-adjustment kg-goal days-goal))
         macros (def-macronutrients-percentage kg-goal daily-goal)]
     (assoc macros :daily-goal daily-goal :kg-goal kg-goal :days-goal days-goal)
     )
   )
 
-(defn print-user-summary [user]
+(defn set-consumed-zero [user]
+  (let [u (assoc user
+    :consumed-calories 0
+    :consumed-proteins 0
+    :consumed-fats 0
+    :consumed-carbs 0)]
+    u
+    ))
+
+(defn consumed-cals [user]
+  (let [food (data/get-users-food (:id user))
+        exercises (data/get-users-exercise (:id user))
+        user (set-consumed-zero user)]
+    (reduce (fn [u f]
+              (assoc u
+                :consumed-calories (+ (:consumed-calories u) (:calories f))
+                :consumed-proteins (+ (:consumed-proteins u) (:proteins f))
+                :consumed-fats (+ (:consumed-fats u) (:fats f))
+                :consumed-carbs (+ (:consumed-carbs u) (:carbs f))))
+            (reduce (fn [u e]
+                      (assoc u
+                        :consumed-calories (- (:consumed-calories u) (:calories e))))
+                    user
+                    exercises)
+            food)))
+
+(defn print-date [date]
+    (fmt/unparse my-format date)
+  )
+
+(defn print-user-all-intakes [user]
+   (println space-line)
+   (println "Foods:")
+   (doseq [food (data/get-all-users-food (:id user))]
+     (println (str/join " " [" - " (:name food) "\n    - Calories:" (str (round (:calories food)) "kcal")
+                             "\n    -" "Proteins:" (str (round (:proteins food)) "g")
+                             "\n    -" "Fats:" (str (round (:fats food)) "g")
+                             "\n    -" "Carbs:" (str (round (:carbs food)) "g")
+                             "\n    -" "Date:" (print-date (:date food))
+                             ])))
+   (println "Exercises:")
+   (doseq [exercise (data/get-all-users-exercise (:id user))]
+     (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min"
+                                                        "\n    - Burned Calories:" (round (:calories exercise)) "kcal"
+                                                        "\n    -" "Date:" (print-date (:date exercise))
+                             ])))
+   (println space-line))
+
+(defn print-user-daily-summary [user]
   (println space-line)
   (println (str/join "\n"
                      ["User:" (str " - " (:username user))
@@ -204,7 +258,22 @@
         (recur))
       result)))
 
-
+(defn change-goal [user]
+  (let [gender (choose-gender)
+        age (-> (prompt (str space-line "Enter age:\n")) Integer/parseInt)
+        height (-> (prompt (str space-line "Enter height in cm:\n")) Integer/parseInt)
+        weight (-> (prompt (str space-line "Enter weight in kg:\n")) Integer/parseInt)
+        goal (final-goal gender weight height age)
+        calorie-goal (:daily-goal goal)
+        proteins-goal (:protein-goal goal)
+        fats-goal (:fat-goal goal)
+        carbs-goal (:carb-goal goal)
+        day-goal (:days-goal goal)
+        weight-goal (:kg-goal goal)
+        u (assoc user :gender gender :age age :weight weight :height height :daily-calorie-goal calorie-goal :daily-proteins-goal proteins-goal :daily-fats-goal fats-goal :daily-carbs-goal carbs-goal :weight-goal (+ weight weight-goal) :day-goal day-goal)]
+    (data/update-user u)
+    )
+  )
 
 (defn create-account []
   (let [username (set-username)
@@ -246,8 +315,17 @@
 (defn -main [u1]
     (print (str space-line "Welcome to MyFitnessPal\t" (:username u1) "!" space-line))
     (loop [u u1]
-      (let [choice (-> (prompt (str space-line "1. Add Food\n2. Add Exercise\n3. View Summary\n4. Exit\n\nSelect an option: " space-line)) Integer/parseInt)]
+      (let [choice (try
+                     (-> (prompt (str space-line "1. Add Food\n2. Add Exercise\n3. View Daily Summary\n4. View User All Summary\n5. Change plan\n0. Exit\n\nSelect an option: " space-line)) Integer/parseInt)
+                     (catch Exception e
+                       e))]
         (cond
+
+          (instance? Exception choice)
+          (do
+            (println space-line "Caught an exception:" (.getMessage choice))
+            (recur u))
+
           (= choice 1)
           (let [food (get-food)
                 grams (-> (prompt (str space-line "Enter grams:\n")) Integer/parseInt)
@@ -266,11 +344,19 @@
 
           (= choice 3)
           (do
-            (print-user-summary u)
+            (print-user-daily-summary (consumed-cals u))
             (data/update-user u)
             (recur u))
 
           (= choice 4)
+          (do
+            (print-user-all-intakes u)
+            (recur u))
+
+          (= choice 5)
+          (recur (change-goal u))
+
+          (= choice 0)
           (do (println space-line "Goodbye!\n" space-line)
               u)
           :else
@@ -278,13 +364,19 @@
               (recur u))))))
 
 
-
-
 (defn login []
     (println space-line "Welcome to MyFitnessPal login page!" space-line)
     (loop [u nil]
-      (let [choice (-> (prompt (str space-line "1. Create account\n2. Login\n3. Exit\n\nSelect an option: " space-line)) Integer/parseInt)]
+      (let [choice (try
+                     (-> (prompt (str space-line "1. Create account\n2. Login\n0. Exit\n\nSelect an option: " space-line)) Integer/parseInt)
+                     (catch Exception e
+                       e))]
         (cond
+
+          (instance? Exception choice)
+          (do
+            (println space-line "Caught an exception:" (.getMessage choice))
+            (recur u))
 
           (= choice 1)
           (recur (create-account))
@@ -302,7 +394,7 @@
                       (recur u)))
                   )
 
-          (= choice 3)
+          (= choice 0)
           (println space-line "Goodbye!\n" space-line)
           :else
           (do (println "\nInvalid choice. Try again.")
