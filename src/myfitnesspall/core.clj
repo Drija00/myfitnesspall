@@ -10,17 +10,15 @@
 
 (def my-format (fmt/formatter "yyyy-MM-dd"))
 
-(defn food-map [user-id name calories proteins fats carbs]
-  {:user-id user-id :date (time/now) :name name :calories calories :proteins proteins :fats fats :carbs carbs})
+(defn food-map [user-id food-id name description calories proteins fats carbs]
+  {:user-id user-id :food-id food-id :date (time/now) :name name :description description :calories calories :proteins proteins :fats fats :carbs carbs})
 
-(defn exercise-map [user-id name duration calories]
-  {:user-id user-id :date (time/now) :exercise name :duration duration :calories calories})
-
-(defn print-food [food]
-  (println (str/join " " ["Food:" (:name food) "Calories:" (:calories food)])))
+(defn exercise-map [user-id ex-id name duration calories]
+  {:user-id user-id :date (time/now) :id ex-id :exercise name :duration duration :calories calories})
 
 (defn create-user [username password gender age height weight weight-goal day-goal calorie-goal proteins-goal fats-goal carbs-goal]
-  (let [user {:username            username
+  (let [user {:id                  nil
+              :username            username
               :password            password
               :gender              gender
               :age                 age
@@ -38,8 +36,8 @@
               :consumed-carbs      0}]
     (data/add-user user)))
 
-(defn add-food [user food-name calories proteins fats carbs]
-  (let [food (food-map (:id user) food-name calories proteins fats carbs)
+(defn add-food [user food-id food-name food-desc calories proteins fats carbs]
+  (let [food (food-map (:id user) food-id food-name food-desc calories proteins fats carbs)
         updated-user (assoc user
                        :consumed-calories (+ (:consumed-calories user) calories)
                        :consumed-proteins (+ (:consumed-proteins user) proteins)
@@ -49,8 +47,8 @@
     updated-user
     ))
 
-(defn add-exercise [user exercise-name duration calories]
-  (let [exercise (exercise-map (:id user) exercise-name duration calories)
+(defn add-exercise [user id exercise-name duration calories]
+  (let [exercise (exercise-map (:id user) id exercise-name duration calories)
         updated-user (assoc user
                        :consumed-calories (- (:consumed-calories user) calories))]
     (data/add-user-exercise exercise)
@@ -185,22 +183,58 @@
     (fmt/unparse my-format date)
   )
 
+(defn print-food-list [list]
+  (doseq [l list]
+    (println (str/join " " [" - ID:" (:id l) "\t - " (:description l)])))
+  )
+
+(defn print-exercise-list [list]
+  (doseq [l list]
+    (println (str/join " " [" - ID:" (:id l) "\t - " (:exercise l)])))
+  )
+
+(defn print-all-user-food [user]
+  (doseq [food (data/get-all-users-food (:id user))]
+    (println (str/join " " [" - " (:description food) "\n    - Calories:" (str (round (:calories food)) "kcal")
+                            "\n    -" "Proteins:" (str (round (:proteins food)) "g")
+                            "\n    -" "Fats:" (str (round (:fats food)) "g")
+                            "\n    -" "Carbs:" (str (round (:carbs food)) "g")
+                            "\n    -" "Date:" (print-date (:date food))
+                            ])))
+  )
+
+(defn print-daily-food [user]
+  (doseq [food (data/get-users-food(:id user))]
+    (println (str/join " " [" - " (:description food) "\n    - Calories:" (str (round (:calories food)) "kcal")
+                            "\n    -" "Proteins:" (str (round (:proteins food)) "g")
+                            "\n    -" "Fats:" (str (round (:fats food)) "g")
+                            "\n    -" "Carbs:" (str (round (:carbs food)) "g")
+                            "\n    -" "Date:" (print-date (:date food))
+                            ])))
+  )
+
+(defn print-all-user-exercise [user]
+  (doseq [exercise (data/get-all-users-exercise (:id user))]
+    (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min"
+                            "\n    - Burned Calories:" (round (:calories exercise)) "kcal"
+                            "\n    -" "Date:" (print-date (:date exercise))
+                            ])))
+  )
+
+(defn print-daily-exercise [user]
+  (doseq [exercise (data/get-users-exercise (:id user))]
+    (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min"
+                            "\n    - Burned Calories:" (round (:calories exercise)) "kcal"
+                            "\n    -" "Date:" (print-date (:date exercise))
+                            ])))
+  )
+
 (defn print-user-all-intakes [user]
    (println space-line)
    (println "Foods:")
-   (doseq [food (data/get-all-users-food (:id user))]
-     (println (str/join " " [" - " (:name food) "\n    - Calories:" (str (round (:calories food)) "kcal")
-                             "\n    -" "Proteins:" (str (round (:proteins food)) "g")
-                             "\n    -" "Fats:" (str (round (:fats food)) "g")
-                             "\n    -" "Carbs:" (str (round (:carbs food)) "g")
-                             "\n    -" "Date:" (print-date (:date food))
-                             ])))
+   (print-all-user-food user)
    (println "Exercises:")
-   (doseq [exercise (data/get-all-users-exercise (:id user))]
-     (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min"
-                                                        "\n    - Burned Calories:" (round (:calories exercise)) "kcal"
-                                                        "\n    -" "Date:" (print-date (:date exercise))
-                             ])))
+   (print-all-user-exercise user)
    (println space-line))
 
 (defn print-user-daily-summary [user]
@@ -223,15 +257,9 @@
                       "Consumed Carbs:" (str " - " (round (:consumed-carbs user)) "g")
                       ]))
   (println "Foods:")
-  (doseq [food (data/get-users-food (:id user))]
-    (println (str/join " " [" - " (:name food) "\n    - Calories:" (str (round (:calories food)) "kcal")
-                            "\n    -" "Proteins:" (str (round (:proteins food)) "g")
-                            "\n    -" "Fats:" (str (round (:fats food)) "g")
-                            "\n    -" "Carbs:" (str (round (:carbs food)) "g")
-                            ])))
+  (print-daily-food user)
   (println "Exercises:")
-  (doseq [exercise (data/get-users-exercise (:id user))]
-    (println (str/join " " [" - " (:exercise exercise) "\n    - Duration:" (:duration exercise) "min" "\n    - Burned Calories:" (round (:calories exercise)) "kcal"])))
+  (print-daily-exercise user)
   (println space-line))
 
 (defn choose-gender []
@@ -292,6 +320,16 @@
     (create-user username password gender age height weight weight-goal day-goal calorie-goal proteins-goal fats-goal carbs-goal)
     (println (str space-line "Account created successfuly"))))
 
+(defn choose-food [foods]
+  (let [id (-> (prompt (str space-line "Enter foods id that you want to add:\n")) Integer/parseInt)
+        food (data/get-food-by-id id)
+        ]
+    (if (nil? food)
+      (do
+        (println (str space-line "Food doesn't exist in our system."))
+        (recur foods))food))
+  )
+
 (defn get-food []
   (let [food-name (clojure.string/upper-case (prompt (str space-line "Enter food name:\n")))
         result (data/get-food food-name)]
@@ -301,6 +339,41 @@
         (recur))
       result))
   )
+
+(defn get-food1 []
+  (let [food-name (clojure.string/upper-case (prompt (str space-line "Enter food name:\n")))
+        result (data/get-all-food-by-name food-name)]
+    (if (empty? result)
+      (do
+        (println (str space-line "Food doesn't exist in our system."))
+        (recur))
+      (do (print-food-list result)
+          (choose-food result))
+      ))
+  )
+
+(defn choose-exercise [exercises]
+  (let [id (-> (prompt (str space-line "Enter exercises id that you want to add:\n")) Integer/parseInt)
+        exercise (data/get-exercise-by-id id)
+        ]
+    (if (nil? exercise)
+      (do
+        (println (str space-line "Exercise doesn't exist in our system."))
+        (recur exercises))exercise))
+  )
+
+(defn get-exercise1 []
+  (let [exercise-name (clojure.string/upper-case (prompt (str space-line "Enter exercise name:\n")))
+        result (data/get-all-exercise-by-name exercise-name)]
+    (if (empty? result)
+      (do
+        (println (str space-line "Exercise doesn't exist in our system."))
+        (recur))
+      (do (print-exercise-list result)
+          (choose-exercise result))
+      ))
+  )
+
 
 (defn get-exercise []
   (let [exercise-name (clojure.string/upper-case (prompt (str space-line "Enter exercise name:\n")))
@@ -327,20 +400,20 @@
             (recur u))
 
           (= choice 1)
-          (let [food (get-food)
+          (let [food (first (get-food1))
                 grams (-> (prompt (str space-line "Enter grams:\n")) Integer/parseInt)
                 calories (intake-calculator (:calories food) grams)
                 proteins (intake-calculator (:proteins food) grams)
                 fats (intake-calculator (:fats food) grams)
                 carbs (intake-calculator (:carbs food) grams)]
-                  (recur (add-food u (:name food) calories proteins fats carbs)))
+                  (recur (add-food u (:id food) (:name food) (:description food) calories proteins fats carbs)))
 
 
           (= choice 2)
-          (let [exercise (get-exercise)
+          (let [exercise (first (get-exercise1))
                 duration (-> (prompt (str space-line "Enter exercise duration in minutes:\n")) Integer/parseInt)
                 calories (exercise-calorie-calculator (:calories-per-kg exercise) duration (:weight u))]
-            (recur (add-exercise u (:exercise exercise) duration calories)))
+            (recur (add-exercise u (:id exercise) (:exercise exercise) duration calories)))
 
           (= choice 3)
           (do

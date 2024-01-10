@@ -1,11 +1,13 @@
 (ns myfitnesspall.data
   (:require [codax.core :as c]
-            [clj-time.core :as time]))
-
-(def filename "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\food.csv")
+            [clj-time.core :as time]
+            [clojure.string :as str]))
 (def exercise-file "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\exercise.csv")
-(slurp filename)
+
+(def food-file "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\food.csv")
 (slurp exercise-file)
+
+(slurp food-file)
 
 (defn parse
   [string]
@@ -17,11 +19,10 @@
   [string]
   (#(clojure.string/replace % #"\n" "") string))
 
-(def text (parse (parse2 (slurp filename))))
 (def text-exercise (parse (parse2 (slurp exercise-file))))
-
-(def comp-keys [:name :calories :proteins :carbs :fats])
-(def exercise-keys [:exercise :calories-per-kg])
+(def text-food (parse (parse2 (slurp food-file))))
+(def exercise-keys [:id :exercise :calories-per-kg])
+(def food-keys [:id :name :description :calories :proteins :carbs :fats])
 
 (defn strToInt
   [str]
@@ -30,33 +31,24 @@
 (defn strToFloat
   [str]
   (Float. str))
-
-(def conversions {:name     identity
-                  :calories strToInt
-                  :proteins strToFloat
-                  :carbs    strToFloat
-                  :fats     strToFloat})
-(def conversions-ex {:exercise identity
+(def conversions-ex {:id strToInt
+                     :exercise identity
                      :calories-per-kg strToFloat})
 
-(defn convert
-  [comp-key value]
-  ((get conversions comp-key) value))
-
+(def food-conversions {:id strToInt
+                       :name     identity
+                       :description identity
+                       :calories strToInt
+                       :proteins strToFloat
+                       :carbs    strToFloat
+                       :fats     strToFloat})
 (defn convert-ex
   [exercise-keys value]
   ((get conversions-ex exercise-keys) value))
 
-
-(defn mapify
-  "Return a seq of maps like {:name \"Edward Cullen\" :glitter-index 10}"
-  [rows]
-  (map (fn [unmapped-row]
-         (reduce (fn [row-map [comp-key value]]
-                   (assoc row-map comp-key (convert comp-key value)))
-                 {}
-                 (map vector comp-keys unmapped-row)))
-       rows))
+(defn convert-food
+  [food-key value]
+  ((get food-conversions food-key) value))
 
 (defn mapify-ex
   "Return a seq of maps like {:name \"Edward Cullen\" :glitter-index 10}"
@@ -68,13 +60,24 @@
                  (map vector exercise-keys unmapped-row)))
        rows))
 
-(def mapped-text (mapify text))
+(defn mapify-food
+  "Return a seq of maps like {:name \"Edward Cullen\" :glitter-index 10}"
+  [rows]
+  (map (fn [unmapped-row]
+         (reduce (fn [row-map [comp-key value]]
+                   (assoc row-map comp-key (convert-food comp-key value)))
+                 {}
+                 (map vector food-keys unmapped-row)))
+       rows))
+
 (def exercise-text (mapify-ex text-exercise))
 
-(def db (c/open-database! "data/demo-database"))
+(def food-text (mapify-food text-food))
 
-(c/assoc-at! db [:foods] mapped-text)
+(def db (c/open-database! "data/demo-database"))
 (c/assoc-at! db [:exercises] exercise-text)
+
+(c/assoc-at! db [:foods-new] food-text)
 
 (c/get-at! db)
 
@@ -201,8 +204,35 @@
   "fetch a food by its name"
   [name]
   (c/with-read-transaction [db tx]
-                           (let [food-map (c/get-at tx [:foods])]
+                           (let [food-map (c/get-at tx [:foods-new])]
                              (first (filter #(= (:name %) name) food-map)))))
+
+(defn get-all-food-by-name
+  "fetch a food by its name"
+  [name]
+  (c/with-read-transaction [db tx]
+                           (let [food-map (c/get-at tx [:foods-new])]
+                             (filter #(= (:name %) name) food-map))))
+(defn get-food-by-id
+  "fetch a food by id"
+  [food-id]
+  (c/with-read-transaction [db tx]
+                           (let [food-map (c/get-at tx [:foods-new])]
+                             (filter #(= (:id %) food-id) food-map))))
+
+(defn get-all-exercise-by-name
+  "fetch a exercise by its name"
+  [name]
+  (c/with-read-transaction [db tx]
+                           (let [exercise-map (c/get-at tx [:exercises])]
+                             (filter #(str/includes? (:exercise %) name) exercise-map))))
+
+(defn get-exercise-by-id
+  "fetch a food by id"
+  [exercise-id]
+  (c/with-read-transaction [db tx]
+                           (let [exercise-map (c/get-at tx [:exercises])]
+                             (filter #(= (:id %) exercise-id) exercise-map))))
 
 (defn get-exercise
   "fetch a exercise by its name"
