@@ -75,14 +75,18 @@
 (def food-text (mapify-food text-food))
 
 (def db (c/open-database! "data/demo-database"))
+
 (c/assoc-at! db [:exercises] exercise-text)
 
 (c/assoc-at! db [:foods-new] food-text)
 
 (c/get-at! db)
 
-#_(c/with-write-transaction [db tx]
-                          (c/assoc-at tx [:counters] {:id 0 :users 0}))
+((fn []
+  (if (nil? (c/get-at! db [:counters]))
+    (c/with-write-transaction [db tx]
+                              (c/assoc-at tx [:counters] {:id 0 :users 0})))))
+
 (defn add-user
   "create a user and assign them an id"
   [user]
@@ -96,9 +100,11 @@
                                   (c/update-at [:counters :users] inc))
                               )))
 
+((fn []
+  (if (nil? (c/get-at! db [:food-counters]))
+    (c/with-write-transaction [db tx]
+                              (c/assoc-at tx [:food-counters] {:id 0 :foods 0})))))
 
-#_(c/with-write-transaction [db tx]
-                          (c/assoc-at tx [:food-counters] {:id 0 :foods 0}))
 
 (defn add-user-food
   "add food that user took"
@@ -112,8 +118,10 @@
                                   (c/update-at [:food-counters :foods] inc)))
   )food)
 
-#_(c/with-write-transaction [db tx]
-                            (c/assoc-at tx [:exercise-counters] {:id 0 :exercises 0}))
+((fn []
+  (if (nil? (c/get-at! db [:exercise-counters]))
+    (c/with-write-transaction [db tx]
+                              (c/assoc-at tx [:exercise-counters] {:id 0 :exercises 0})))))
 
 (defn add-user-exercise
   "add exercise that user performed"
