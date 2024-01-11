@@ -1,10 +1,10 @@
-# myfitnesspall
+# MyFitnessPall
 
-A Clojure library designed to ... well, that part is up to you.
-
+This is a collage project that calculates the amount of calories a person should consume during the day. The amount of calories is calculated based on the desire whether a person wants to lose weight or gain weight, also in relation to his weight, height, gender, age and daily activity. A person can track his daily goal and have an insight into the food and activities he entered.
 ## Usage
 
-FIXME
+In order to start project it is necessary to load all from the core.clj file into the REPL.
+After that it is necessary to start function (login) in the REPL. When the login menu opens, it is possible to create an account, log in and close the program. After logging in, it is possible to add a food or activity, view daily summary or all time user summary, change the plan and log out.
 
 ## License
 
