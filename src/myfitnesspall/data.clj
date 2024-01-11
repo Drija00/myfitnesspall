@@ -2,9 +2,10 @@
   (:require [codax.core :as c]
             [clj-time.core :as time]
             [clojure.string :as str]))
-(def exercise-file "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\exercise.csv")
+(def exercise-file (clojure.java.io/resource "exercise.csv"))
 
-(def food-file "C:\\Users\\andrijama\\Desktop\\myfitnesspall\\resources\\food.csv")
+(def food-file (clojure.java.io/resource "food.csv"))
+
 (slurp exercise-file)
 
 (slurp food-file)
